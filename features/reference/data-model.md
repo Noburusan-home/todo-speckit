@@ -1,6 +1,6 @@
 # Data Model Reference
 
-**Status:** Feature 1 — users and sessions.
+**Status:** Feature 1 users and sessions, Feature 2 lists.
 
 Schema below matches the Sequelize models in `backend/app/models/`.
 
@@ -32,13 +32,26 @@ Schema below matches the Sequelize models in `backend/app/models/`.
 | `createdAt` | DATE | Sequelize timestamp |
 | `updatedAt` | DATE | Sequelize timestamp |
 
+### `lists`
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `id` | INTEGER PK | Auto-increment |
+| `name` | STRING(100) | Required; trimmed; max 100 characters |
+| `userId` | INTEGER FK | Required; references `users.id`; set from the session on create |
+| `createdAt` | DATE | Sequelize timestamp |
+| `updatedAt` | DATE | Sequelize timestamp |
+
 ## Associations
 
 - `User` hasMany `Session` (`userId`, on delete cascade)
 - `Session` belongsTo `User` (`userId`)
+- `User` hasMany `List` (`userId`, on delete cascade)
+- `List` belongsTo `User` (`userId`)
 
 ## Feature provenance
 
 | Area | Introduced |
 |------|------------|
 | `users`, `sessions` | Feature 1 |
+| `lists` | Feature 2 |

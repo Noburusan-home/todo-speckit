@@ -45,6 +45,14 @@ export async function authenticate(req, res, next) {
   }
 }
 
+export async function getAccessibleListOrNull(req, listId) {
+  const row = await db.list.findOne({
+    where: { id: listId, userId: req.user.id },
+  });
+
+  return row ?? null;
+}
+
 export function requireAdmin(req, res, next) {
   const role = req.user?.role;
 

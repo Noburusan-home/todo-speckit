@@ -1,6 +1,6 @@
 # API Reference
 
-**Status:** Feature 1 authentication, plus the starter health check.
+**Status:** Feature 1 authentication and Feature 2 list management, plus the starter health check.
 
 Base path: `/todo`. Authenticated routes require `Authorization: Bearer <token>`.
 
@@ -12,7 +12,10 @@ Base path: `/todo`. Authenticated routes require `Authorization: Bearer <token>`
 | `POST` | `/todo/register` | No | Create an account and session |
 | `POST` | `/todo/login` | No | Authenticate and return the current session |
 | `POST` | `/todo/logout` | Yes | Delete the session row for the bearer token |
-| `GET` | `/todo/lists` | Yes | Lists owned by `req.user.id`. No list table yet, so the body is `[]` |
+| `GET` | `/todo/lists` | Yes | Lists owned by the caller, A–Z by name |
+| `POST` | `/todo/lists` | Yes | Create a list owned by the caller |
+| `PUT` | `/todo/lists/:listId` | Yes | Rename a list owned by the caller |
+| `DELETE` | `/todo/lists/:listId` | Yes | Delete a list owned by the caller |
 
 ## Health
 
@@ -86,13 +89,38 @@ Missing, invalid, or expired token: `401` `{ "message": "Unauthorized! ..." }`.
 
 ## Lists
 
-`GET /todo/lists` with a valid bearer token returns `200` and `[]`.
+A list object:
 
-Unauthenticated calls return `401` `{ "message": "Unauthorized! ..." }`.
+```json
+{
+  "id": 1,
+  "name": "Groceries",
+  "userId": 42,
+  "createdAt": "2026-07-02T12:00:00.000Z",
+  "updatedAt": "2026-07-02T12:00:00.000Z"
+}
+```
+
+`GET /todo/lists` returns `200` and an array of the caller's lists, ordered by name.
+
+`POST /todo/lists` body is `{ "name": "Groceries" }`. Any `userId` in the body is ignored. `201` returns the created list. The saved `userId` is `req.user.id`.
+
+`PUT /todo/lists/:listId` body is `{ "name": "Shopping" }`. `200` returns the updated list.
+
+`DELETE /todo/lists/:listId` returns `200` `{ "message": "List deleted." }`.
+
+| Condition | Status | Message |
+|-----------|--------|---------|
+| Blank or whitespace name | `400` | `List name is required.` |
+| Name longer than 100 characters | `400` | `List name must be 100 characters or fewer.` |
+| Non-numeric `:listId` | `400` | `List id must be a number.` |
+| Missing list, or a list owned by someone else | `404` | `List with id=<id> not found.` |
+| Missing or invalid token | `401` | `Unauthorized! ...` |
 
 ## Feature provenance
 
 | Area | Introduced |
 |------|------------|
 | Health check | Starter shell |
-| Register, login, logout, guarded list read | Feature 1 |
+| Register, login, logout | Feature 1 |
+| List CRUD | Feature 2 |
