@@ -33,3 +33,4 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | Lists, dashboard, MenuBar sign-out | Feature 2 |
 | Todo items on owned lists | Feature 3 |
 | Profile menu and self-only profile update | Feature 4 |
+| Optional todo due dates and overdue styling | Feature 5 |

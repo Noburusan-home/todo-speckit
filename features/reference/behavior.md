@@ -50,6 +50,8 @@ They do **not** authorize new scope — implement only from `features/feature-*.
 | Todo lists are ordered incomplete first, then oldest `createdAt` first. | `findAll` `order` | Feature 3 |
 | Deleting a list deletes its todos. | `List` hasMany `Todo` on delete cascade | Feature 3 |
 | Each list row has an **Items** action that opens **{list name} — Items**. Empty copy is **No todos in this list yet.** **+ Add Item** is only inside that dialog. Completed titles are struck through. | `Dashboard.vue` | Feature 3 |
+| `dueDate` is optional, calendar-only (`YYYY-MM-DD`). Omit it on create for null. On update, `null` clears it and omitting it leaves it unchanged. An invalid date is **Due date must be a valid date in YYYY-MM-DD format.** | `todo.controller` | Feature 5 |
+| A set due date is shown on the todo row. An incomplete todo whose date is before today uses overdue styling. A completed todo does not. | `Dashboard.vue`, `isTodoOverdue` | Feature 5 |
 
 ## Profile
 

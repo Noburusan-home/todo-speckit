@@ -1,6 +1,6 @@
 # API Reference
 
-**Status:** Feature 1 authentication, Feature 2 lists, Feature 3 todos, and Feature 4 profile.
+**Status:** Feature 1 authentication, Feature 2 lists, Feature 3 todos, Feature 4 profile, and Feature 5 due dates.
 
 Base path: `/todo`. Authenticated routes require `Authorization: Bearer <token>`.
 
@@ -133,6 +133,7 @@ A todo object:
   "listId": 1,
   "title": "Buy milk",
   "completed": false,
+  "dueDate": "2026-07-15",
   "userId": 42,
   "createdAt": "2026-07-02T12:05:00.000Z",
   "updatedAt": "2026-07-02T12:05:00.000Z"
@@ -141,15 +142,16 @@ A todo object:
 
 `GET /todo/lists/:listId/todos` returns `200` and the caller's todos for that list. Incomplete todos come first, then older `createdAt` first.
 
-`POST /todo/lists/:listId/todos` body is `{ "title": "Buy milk" }`. `userId` and `listId` in the body are ignored. `201` returns the todo with `completed: false`, the session user's id, and the owned list's id.
+`POST /todo/lists/:listId/todos` body is `{ "title": "Buy milk" }`. Optional `dueDate` is `YYYY-MM-DD` or `null`. Omit it for no due date. `userId` and `listId` in the body are ignored. `201` returns the todo with `completed: false`, the session user's id, and the owned list's id.
 
-`PUT /todo/todos/:id` accepts `{ "title": "Buy oat milk" }` and/or `{ "completed": true }`. `200` returns the updated todo. Ownership fields are not changed.
+`PUT /todo/todos/:id` accepts `{ "title": "Buy oat milk" }`, `{ "completed": true }`, and/or `{ "dueDate": "2026-07-20" }`. `dueDate: null` clears the date. Omitting `dueDate` leaves the stored date unchanged. `200` returns the updated todo. Ownership fields are not changed.
 
 `DELETE /todo/todos/:id` returns `200` `{ "message": "Todo deleted." }`.
 
 | Condition | Status | Message |
 |-----------|--------|---------|
 | Blank or whitespace title | `400` | `Todo title is required.` |
+| Invalid `dueDate` | `400` | `Due date must be a valid date in YYYY-MM-DD format.` |
 | Title longer than 255 characters | `400` | `Todo title must be 255 characters or fewer.` |
 | `completed` is not a boolean | `400` | `Completed must be true or false.` |
 | Non-numeric list id | `400` | `List id must be a number.` |
@@ -202,3 +204,4 @@ Deleting a list deletes its todos.
 | List CRUD | Feature 2 |
 | Todo items | Feature 3 |
 | Profile read and update | Feature 4 |
+| Todo due dates | Feature 5 |

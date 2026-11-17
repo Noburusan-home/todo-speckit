@@ -18,6 +18,30 @@ function trimmedTitle(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+function dueDateError(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value !== "string" || !DATE_ONLY_REGEX.test(value)) {
+    return "Due date must be a valid date in YYYY-MM-DD format.";
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  const valid = parsed.getUTCFullYear() === year
+    && parsed.getUTCMonth() === month - 1
+    && parsed.getUTCDate() === day;
+
+  if (!valid) {
+    return "Due date must be a valid date in YYYY-MM-DD format.";
+  }
+
+  return null;
+}
+
 function titleError(title) {
   if (!title) {
     return "Todo title is required.";
@@ -81,9 +105,22 @@ exports.create = async (req, res) => {
       return res.status(404).send({ message: `List with id=${listId} not found.` });
     }
 
+    let dueDate = null;
+
+    if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "dueDate") && req.body.dueDate !== null) {
+      const dateMessage = dueDateError(req.body.dueDate);
+
+      if (dateMessage) {
+        return res.status(400).send({ message: dateMessage });
+      }
+
+      dueDate = req.body.dueDate;
+    }
+
     const todo = await db.todo.create({
       title,
       completed: false,
+      dueDate,
       listId: list.id,
       userId: req.user.id,
     });
@@ -129,6 +166,16 @@ exports.update = async (req, res) => {
 
     if (!todo) {
       return res.status(404).send({ message: `Todo with id=${id} not found.` });
+    }
+
+    if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "dueDate")) {
+      const dateMessage = dueDateError(req.body.dueDate);
+
+      if (dateMessage) {
+        return res.status(400).send({ message: dateMessage });
+      }
+
+      changes.dueDate = req.body.dueDate;
     }
 
     await todo.update(changes);

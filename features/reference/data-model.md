@@ -1,6 +1,6 @@
 # Data Model Reference
 
-**Status:** Feature 1 users and sessions, Feature 2 lists, Feature 3 todos. Feature 4 edits the existing `users` row and adds no tables.
+**Status:** Feature 1 users and sessions, Feature 2 lists, Feature 3 todos, Feature 4 profile edits, Feature 5 due dates.
 
 Schema below matches the Sequelize models in `backend/app/models/`.
 
@@ -50,6 +50,7 @@ Schema below matches the Sequelize models in `backend/app/models/`.
 | `listId` | INTEGER FK | Required; references `lists.id`; deleted when the list is deleted |
 | `title` | STRING(255) | Required; trimmed; max 255 characters |
 | `completed` | BOOLEAN | Required; default `false` |
+| `dueDate` | DATEONLY | Optional; `YYYY-MM-DD` or null |
 | `userId` | INTEGER FK | Required; references `users.id`; set from the session on create |
 | `createdAt` | DATE | Sequelize timestamp |
 | `updatedAt` | DATE | Sequelize timestamp |
@@ -73,3 +74,4 @@ Schema below matches the Sequelize models in `backend/app/models/`.
 | `lists` | Feature 2 |
 | `todos` | Feature 3 |
 | Profile edits on `users` | Feature 4 |
+| `todos.dueDate` | Feature 5 |
