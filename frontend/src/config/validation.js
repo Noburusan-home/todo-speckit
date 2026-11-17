@@ -32,7 +32,7 @@ export function isValidDueDate(value) {
 }
 
 export const optionalDueDateRules = [
-  (value) => !value || isValidDueDate(value) || "Enter a valid due date.",
+  (value) => !value || isValidDueDate(value) || "Due date must be a valid date in YYYY-MM-DD format.",
 ];
 
 export function formatDueDate(value) {
