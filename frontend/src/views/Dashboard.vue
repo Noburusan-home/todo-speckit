@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref } from "vue";
 import listServices from "../services/listServices.js";
+import todoServices from "../services/todoServices.js";
 
 const lists = ref([]);
 const loading = ref(false);
@@ -16,11 +17,36 @@ const renameName = ref("");
 const selected = ref(null);
 const createForm = ref(null);
 const renameForm = ref(null);
+const addTodoForm = ref(null);
+const editTodoForm = ref(null);
+
+const itemsOpen = ref(false);
+const itemsList = ref(null);
+const todos = ref([]);
+const todosLoading = ref(false);
+const itemsError = ref("");
+const todoFormError = ref("");
+const addTodoOpen = ref(false);
+const editTodoOpen = ref(false);
+const deleteTodoOpen = ref(false);
+const todoTitle = ref("");
+const selectedTodo = ref(null);
 
 const nameRules = [(value) => !!value?.trim() || "List name is required."];
+const titleRules = [(value) => !!value?.trim() || "Todo title is required."];
 
 function sortLists(rows) {
   return [...rows].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function sortTodos(rows) {
+  return [...rows].sort((left, right) => {
+    if (left.completed !== right.completed) {
+      return left.completed ? 1 : -1;
+    }
+
+    return new Date(left.createdAt) - new Date(right.createdAt);
+  });
 }
 
 function apiMessage(err, fallback) {
@@ -122,6 +148,129 @@ async function confirmDelete() {
 }
 
 onMounted(loadLists);
+
+async function openItems(list) {
+  itemsList.value = list;
+  todos.value = [];
+  itemsError.value = "";
+  todoFormError.value = "";
+  addTodoOpen.value = false;
+  editTodoOpen.value = false;
+  deleteTodoOpen.value = false;
+  itemsOpen.value = true;
+  todosLoading.value = true;
+
+  try {
+    const response = await todoServices.getTodos(list.id);
+    todos.value = sortTodos(response.data ?? []);
+  } catch (err) {
+    itemsError.value = apiMessage(err, "Unable to load todos.");
+  } finally {
+    todosLoading.value = false;
+  }
+}
+
+function closeItems() {
+  itemsOpen.value = false;
+  addTodoOpen.value = false;
+  editTodoOpen.value = false;
+  deleteTodoOpen.value = false;
+}
+
+function openAddTodo() {
+  todoTitle.value = "";
+  todoFormError.value = "";
+  addTodoOpen.value = true;
+}
+
+async function createTodo() {
+  todoFormError.value = "";
+  const { valid } = await addTodoForm.value.validate();
+
+  if (!valid) {
+    return;
+  }
+
+  saving.value = true;
+
+  try {
+    const response = await todoServices.createTodo(itemsList.value.id, {
+      title: todoTitle.value.trim(),
+    });
+    todos.value = sortTodos([...todos.value, response.data]);
+    addTodoOpen.value = false;
+  } catch (err) {
+    todoFormError.value = apiMessage(err, "Unable to add the todo.");
+  } finally {
+    saving.value = false;
+  }
+}
+
+function openEditTodo(todo) {
+  selectedTodo.value = todo;
+  todoTitle.value = todo.title;
+  todoFormError.value = "";
+  editTodoOpen.value = true;
+}
+
+async function saveTodo() {
+  todoFormError.value = "";
+  const { valid } = await editTodoForm.value.validate();
+
+  if (!valid) {
+    return;
+  }
+
+  saving.value = true;
+
+  try {
+    const response = await todoServices.updateTodo(selectedTodo.value.id, {
+      title: todoTitle.value.trim(),
+    });
+    todos.value = sortTodos(
+      todos.value.map((todo) => (todo.id === response.data.id ? response.data : todo))
+    );
+    editTodoOpen.value = false;
+  } catch (err) {
+    todoFormError.value = apiMessage(err, "Unable to update the todo.");
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function setCompleted(todo, completed) {
+  itemsError.value = "";
+
+  try {
+    const response = await todoServices.updateTodo(todo.id, { completed });
+    todos.value = sortTodos(
+      todos.value.map((item) => (item.id === response.data.id ? response.data : item))
+    );
+  } catch (err) {
+    itemsError.value = apiMessage(err, "Unable to update the todo.");
+  }
+}
+
+function openDeleteTodo(todo) {
+  selectedTodo.value = todo;
+  todoFormError.value = "";
+  deleteTodoOpen.value = true;
+}
+
+async function confirmDeleteTodo() {
+  todoFormError.value = "";
+  saving.value = true;
+
+  try {
+    await todoServices.deleteTodo(selectedTodo.value.id);
+    todos.value = todos.value.filter((todo) => todo.id !== selectedTodo.value.id);
+    deleteTodoOpen.value = false;
+  } catch (err) {
+    todoFormError.value = apiMessage(err, "Unable to delete the todo.");
+  } finally {
+    saving.value = false;
+  }
+}
 </script>
 
 <template>
@@ -140,6 +289,9 @@ onMounted(loadLists);
       <v-list-item v-for="list in lists" :key="list.id">
         <v-list-item-title>{{ list.name }}</v-list-item-title>
         <template #append>
+          <v-btn icon size="small" aria-label="Items" @click="openItems(list)">
+            <v-icon icon="mdi-format-list-bulleted" />
+          </v-btn>
           <v-btn icon size="small" aria-label="Edit list" @click="openRename(list)">
             <v-icon icon="mdi-pencil" />
           </v-btn>
@@ -191,6 +343,85 @@ onMounted(loadLists);
           Delete
         </v-btn>
         <v-btn class="ml-2" color="secondary" variant="text" @click="deleteOpen = false">Cancel</v-btn>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="itemsOpen" max-width="640">
+      <v-card class="pa-4">
+        <div class="d-flex align-center justify-space-between mb-4">
+          <h2 class="text-h5">{{ itemsList?.name }} — Items</h2>
+          <v-btn color="primary" variant="elevated" class="oc-cta" @click="openAddTodo">+ Add Item</v-btn>
+        </div>
+        <v-alert v-if="itemsError" type="error" class="mb-4">{{ itemsError }}</v-alert>
+        <v-progress-linear v-if="todosLoading" indeterminate color="primary" class="mb-4" />
+        <p v-else-if="todos.length === 0">No todos in this list yet.</p>
+        <v-list v-else class="bg-surface">
+          <v-list-item v-for="todo in todos" :key="todo.id">
+            <template #prepend>
+              <v-checkbox-btn
+                :model-value="todo.completed"
+                :aria-label="`Mark ${todo.title} ${todo.completed ? 'incomplete' : 'complete'}`"
+                @update:model-value="(value) => setCompleted(todo, value)"
+              />
+            </template>
+            <v-list-item-title :class="{ 'text-decoration-line-through text-medium-emphasis': todo.completed }">
+              {{ todo.title }}
+            </v-list-item-title>
+            <template #append>
+              <v-btn icon size="small" aria-label="Edit todo" @click="openEditTodo(todo)">
+                <v-icon icon="mdi-pencil" />
+              </v-btn>
+              <v-btn icon size="small" aria-label="Delete todo" @click="openDeleteTodo(todo)">
+                <v-icon icon="mdi-delete" />
+              </v-btn>
+            </template>
+          </v-list-item>
+        </v-list>
+        <v-btn class="mt-4" color="secondary" variant="text" @click="closeItems">Close</v-btn>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="addTodoOpen" max-width="480">
+      <v-card class="pa-4">
+        <h2 class="text-h5 mb-4">Add item</h2>
+        <v-alert v-if="todoFormError" type="error" class="mb-4">{{ todoFormError }}</v-alert>
+        <v-form ref="addTodoForm" @submit.prevent="createTodo">
+          <v-text-field v-model="todoTitle" label="Todo title" :rules="titleRules" />
+          <v-btn type="submit" color="primary" variant="elevated" class="oc-cta" :loading="saving">
+            Add
+          </v-btn>
+          <v-btn class="ml-2" color="secondary" variant="text" type="button" @click="addTodoOpen = false">
+            Cancel
+          </v-btn>
+        </v-form>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="editTodoOpen" max-width="480">
+      <v-card class="pa-4">
+        <h2 class="text-h5 mb-4">Edit item</h2>
+        <v-alert v-if="todoFormError" type="error" class="mb-4">{{ todoFormError }}</v-alert>
+        <v-form ref="editTodoForm" @submit.prevent="saveTodo">
+          <v-text-field v-model="todoTitle" label="Todo title" :rules="titleRules" />
+          <v-btn type="submit" color="primary" variant="elevated" class="oc-cta" :loading="saving">
+            Save
+          </v-btn>
+          <v-btn class="ml-2" color="secondary" variant="text" type="button" @click="editTodoOpen = false">
+            Cancel
+          </v-btn>
+        </v-form>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="deleteTodoOpen" max-width="480">
+      <v-card class="pa-4">
+        <h2 class="text-h5 mb-4">Delete todo</h2>
+        <p class="mb-4">Delete {{ selectedTodo?.title }}?</p>
+        <v-alert v-if="todoFormError" type="error" class="mb-4">{{ todoFormError }}</v-alert>
+        <v-btn color="primary" variant="elevated" class="oc-cta" :loading="saving" @click="confirmDeleteTodo">
+          Delete
+        </v-btn>
+        <v-btn class="ml-2" color="secondary" variant="text" @click="deleteTodoOpen = false">Cancel</v-btn>
       </v-card>
     </v-dialog>
   </v-container>

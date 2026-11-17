@@ -1,10 +1,14 @@
 /**
  * Feature 2 — Todo List Management
  * Spec: features/feature-2-todo-list-management.md
+ *
+ * Feature 3 — Todo List Item Management
+ * Spec: features/feature-3-todo-list-item-management.md
  */
 import { DOMWrapper, flushPromises } from "@vue/test-utils";
 import Dashboard from "../src/views/Dashboard.vue";
 import listServices from "../src/services/listServices.js";
+import todoServices from "../src/services/todoServices.js";
 import { mountWithPlugins } from "./testUtils.js";
 
 vi.mock("../src/services/listServices.js", () => ({
@@ -13,6 +17,15 @@ vi.mock("../src/services/listServices.js", () => ({
     createList: vi.fn(),
     updateList: vi.fn(),
     deleteList: vi.fn(),
+  },
+}));
+
+vi.mock("../src/services/todoServices.js", () => ({
+  default: {
+    getTodos: vi.fn(),
+    createTodo: vi.fn(),
+    updateTodo: vi.fn(),
+    deleteTodo: vi.fn(),
   },
 }));
 
@@ -62,6 +75,48 @@ async function fillListName(value) {
   await new DOMWrapper(input).setValue(value);
 }
 
+function todo(id, title, listId, completed = false, createdAt = "2026-07-02T12:05:00.000Z") {
+  return {
+    id,
+    listId,
+    title,
+    completed,
+    userId: 42,
+    createdAt,
+    updatedAt: createdAt,
+  };
+}
+
+async function openItems(listName) {
+  const row = [...document.querySelectorAll(".v-list-item")].find((item) => item.textContent.includes(listName));
+
+  if (!row) {
+    throw new Error(`Missing list row: ${listName}`);
+  }
+
+  const button = row.querySelector('[aria-label="Items"]');
+  await new DOMWrapper(button).trigger("click");
+  await flushPromises();
+}
+
+async function fillTodoTitle(value) {
+  await flushPromises();
+  const input = [...document.querySelectorAll("input")].find((element) => {
+    const label = element.labels?.[0]?.textContent?.trim() || element.getAttribute("aria-label") || "";
+    return label === "Todo title";
+  });
+
+  if (!input) {
+    throw new Error(`Missing todo title field. Text: ${document.body.textContent}`);
+  }
+
+  await new DOMWrapper(input).setValue(value);
+}
+
+function itemTitles() {
+  return [...document.querySelectorAll(".v-list-item-title")].map((element) => element.textContent.trim());
+}
+
 async function submitOpenForm() {
   const form = document.querySelector(".v-overlay--active form");
 
@@ -80,6 +135,11 @@ describe("Feature 2 — Todo List Management", () => {
     listServices.updateList.mockReset();
     listServices.deleteList.mockReset();
     listServices.getLists.mockResolvedValue({ data: [] });
+    todoServices.getTodos.mockReset();
+    todoServices.createTodo.mockReset();
+    todoServices.updateTodo.mockReset();
+    todoServices.deleteTodo.mockReset();
+    todoServices.getTodos.mockResolvedValue({ data: [] });
   });
 
   afterEach(() => {
@@ -175,6 +235,175 @@ describe("Feature 2 — Todo List Management", () => {
       expect(listServices.deleteList).toHaveBeenCalledWith(1);
       expect(wrapper.text()).not.toContain("Groceries");
       expect(wrapper.text()).toContain("No lists yet. Create your first list.");
+      wrapper.unmount();
+    });
+  });
+});
+
+describe("Feature 3 — Todo List Item Management", () => {
+  beforeEach(() => {
+    listServices.getLists.mockReset();
+    todoServices.getTodos.mockReset();
+    todoServices.createTodo.mockReset();
+    todoServices.updateTodo.mockReset();
+    todoServices.deleteTodo.mockReset();
+    listServices.getLists.mockResolvedValue({ data: [] });
+    todoServices.getTodos.mockResolvedValue({ data: [] });
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  describe("US-3.1 — Add tasks to a list", () => {
+    it("User adds a todo to a list via dialog", async () => {
+      listServices.getLists.mockResolvedValue({ data: [list(1, "Groceries")] });
+      todoServices.createTodo.mockResolvedValue({
+        data: todo(10, "Buy milk", 1),
+      });
+      const wrapper = await mountDashboard();
+
+      await openItems("Groceries");
+      await clickButton("+ Add Item");
+      await fillTodoTitle("Buy milk");
+      await submitOpenForm();
+
+      expect(todoServices.createTodo).toHaveBeenCalledWith(1, { title: "Buy milk" });
+      expect(itemTitles()).toContain("Buy milk");
+      expect(document.querySelector(".v-overlay--active form")).toBeNull();
+      wrapper.unmount();
+    });
+
+    it("User adds a todo with an empty title", async () => {
+      listServices.getLists.mockResolvedValue({ data: [list(1, "Groceries")] });
+      const wrapper = await mountDashboard();
+
+      await openItems("Groceries");
+      await clickButton("+ Add Item");
+      await fillTodoTitle("   ");
+      await submitOpenForm();
+
+      expect(document.body.textContent).toContain("Todo title is required.");
+      expect(todoServices.createTodo).not.toHaveBeenCalled();
+      wrapper.unmount();
+    });
+
+    it("Add item is only available inside the items dialog", async () => {
+      listServices.getLists.mockResolvedValue({ data: [list(1, "Groceries")] });
+      const wrapper = await mountDashboard();
+
+      expect(document.body.textContent).not.toContain("+ Add Item");
+      wrapper.unmount();
+    });
+  });
+
+  describe("US-3.2 — View tasks in a list", () => {
+    it("List items dialog shows empty state", async () => {
+      listServices.getLists.mockResolvedValue({ data: [list(2, "Personal")] });
+      const wrapper = await mountDashboard();
+
+      await openItems("Personal");
+
+      expect(document.body.textContent).toContain("No todos in this list yet.");
+      wrapper.unmount();
+    });
+
+    it("User opens items for different lists", async () => {
+      listServices.getLists.mockResolvedValue({
+        data: [list(1, "Work"), list(2, "Personal")],
+      });
+      todoServices.getTodos.mockImplementation(async (listId) => {
+        if (listId === 1) {
+          return { data: [todo(10, "Email client", 1), todo(11, "Write report", 1, false, "2026-07-02T12:06:00.000Z")] };
+        }
+
+        return { data: [todo(12, "Call mom", 2)] };
+      });
+      const wrapper = await mountDashboard();
+
+      await openItems("Personal");
+      expect(itemTitles()).toContain("Call mom");
+      expect(itemTitles()).not.toContain("Email client");
+      expect(itemTitles()).not.toContain("Write report");
+
+      await clickButton("Close");
+      await openItems("Work");
+
+      expect(itemTitles()).toEqual(expect.arrayContaining(["Email client", "Write report"]));
+      expect(itemTitles()).not.toContain("Call mom");
+      expect(todoServices.getTodos).toHaveBeenCalledWith(2);
+      expect(todoServices.getTodos).toHaveBeenCalledWith(1);
+      wrapper.unmount();
+    });
+  });
+
+  describe("US-3.3 — Complete tasks", () => {
+    it("User marks a todo as complete", async () => {
+      listServices.getLists.mockResolvedValue({ data: [list(1, "Groceries")] });
+      todoServices.getTodos.mockResolvedValue({ data: [todo(10, "Buy milk", 1, false)] });
+      todoServices.updateTodo.mockResolvedValue({ data: todo(10, "Buy milk", 1, true) });
+      const wrapper = await mountDashboard();
+
+      await openItems("Groceries");
+      const checkbox = document.querySelector('[aria-label="Mark Buy milk complete"]');
+      await new DOMWrapper(checkbox).trigger("click");
+      await flushPromises();
+
+      expect(todoServices.updateTodo).toHaveBeenCalledWith(10, { completed: true });
+      expect(document.querySelector(".text-decoration-line-through")?.textContent).toContain("Buy milk");
+      wrapper.unmount();
+    });
+
+    it("User marks a completed todo as incomplete", async () => {
+      listServices.getLists.mockResolvedValue({ data: [list(1, "Groceries")] });
+      todoServices.getTodos.mockResolvedValue({ data: [todo(10, "Buy milk", 1, true)] });
+      todoServices.updateTodo.mockResolvedValue({ data: todo(10, "Buy milk", 1, false) });
+      const wrapper = await mountDashboard();
+
+      await openItems("Groceries");
+      expect(document.querySelector(".text-decoration-line-through")).not.toBeNull();
+      const checkbox = document.querySelector('[aria-label="Mark Buy milk incomplete"]');
+      await new DOMWrapper(checkbox).trigger("click");
+      await flushPromises();
+
+      expect(todoServices.updateTodo).toHaveBeenCalledWith(10, { completed: false });
+      expect(document.querySelector(".text-decoration-line-through")).toBeNull();
+      wrapper.unmount();
+    });
+  });
+
+  describe("US-3.4 — Edit and remove tasks", () => {
+    it("User edits a todo title", async () => {
+      listServices.getLists.mockResolvedValue({ data: [list(1, "Groceries")] });
+      todoServices.getTodos.mockResolvedValue({ data: [todo(10, "Buy milk", 1)] });
+      todoServices.updateTodo.mockResolvedValue({ data: todo(10, "Buy oat milk", 1) });
+      const wrapper = await mountDashboard();
+
+      await openItems("Groceries");
+      await new DOMWrapper(document.querySelector('[aria-label="Edit todo"]')).trigger("click");
+      await flushPromises();
+      await fillTodoTitle("Buy oat milk");
+      await submitOpenForm();
+
+      expect(todoServices.updateTodo).toHaveBeenCalledWith(10, { title: "Buy oat milk" });
+      expect(itemTitles()).toContain("Buy oat milk");
+      expect(itemTitles()).not.toContain("Buy milk");
+      wrapper.unmount();
+    });
+
+    it("User deletes a todo", async () => {
+      listServices.getLists.mockResolvedValue({ data: [list(1, "Groceries")] });
+      todoServices.getTodos.mockResolvedValue({ data: [todo(10, "Buy milk", 1)] });
+      todoServices.deleteTodo.mockResolvedValue({ data: { message: "Todo deleted." } });
+      const wrapper = await mountDashboard();
+
+      await openItems("Groceries");
+      await new DOMWrapper(document.querySelector('[aria-label="Delete todo"]')).trigger("click");
+      await clickButton("Delete");
+
+      expect(todoServices.deleteTodo).toHaveBeenCalledWith(10);
+      expect(itemTitles()).not.toContain("Buy milk");
+      expect(document.body.textContent).toContain("No todos in this list yet.");
       wrapper.unmount();
     });
   });

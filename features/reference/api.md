@@ -1,6 +1,6 @@
 # API Reference
 
-**Status:** Feature 1 authentication and Feature 2 list management, plus the starter health check.
+**Status:** Feature 1 authentication, Feature 2 lists, Feature 3 todos, and Feature 4 profile.
 
 Base path: `/todo`. Authenticated routes require `Authorization: Bearer <token>`.
 
@@ -16,6 +16,12 @@ Base path: `/todo`. Authenticated routes require `Authorization: Bearer <token>`
 | `POST` | `/todo/lists` | Yes | Create a list owned by the caller |
 | `PUT` | `/todo/lists/:listId` | Yes | Rename a list owned by the caller |
 | `DELETE` | `/todo/lists/:listId` | Yes | Delete a list owned by the caller |
+| `GET` | `/todo/lists/:listId/todos` | Yes | Todos in a list owned by the caller |
+| `POST` | `/todo/lists/:listId/todos` | Yes | Add a todo to an owned list |
+| `PUT` | `/todo/todos/:id` | Yes | Update an owned todo's title and/or completed flag |
+| `DELETE` | `/todo/todos/:id` | Yes | Delete an owned todo |
+| `GET` | `/todo/users/:id` | Yes | Fetch the caller's own profile |
+| `PUT` | `/todo/users/:id` | Yes | Update the caller's own profile |
 
 ## Health
 
@@ -117,6 +123,76 @@ A list object:
 | Missing list, or a list owned by someone else | `404` | `List with id=<id> not found.` |
 | Missing or invalid token | `401` | `Unauthorized! ...` |
 
+## Todos
+
+A todo object:
+
+```json
+{
+  "id": 10,
+  "listId": 1,
+  "title": "Buy milk",
+  "completed": false,
+  "userId": 42,
+  "createdAt": "2026-07-02T12:05:00.000Z",
+  "updatedAt": "2026-07-02T12:05:00.000Z"
+}
+```
+
+`GET /todo/lists/:listId/todos` returns `200` and the caller's todos for that list. Incomplete todos come first, then older `createdAt` first.
+
+`POST /todo/lists/:listId/todos` body is `{ "title": "Buy milk" }`. `userId` and `listId` in the body are ignored. `201` returns the todo with `completed: false`, the session user's id, and the owned list's id.
+
+`PUT /todo/todos/:id` accepts `{ "title": "Buy oat milk" }` and/or `{ "completed": true }`. `200` returns the updated todo. Ownership fields are not changed.
+
+`DELETE /todo/todos/:id` returns `200` `{ "message": "Todo deleted." }`.
+
+| Condition | Status | Message |
+|-----------|--------|---------|
+| Blank or whitespace title | `400` | `Todo title is required.` |
+| Title longer than 255 characters | `400` | `Todo title must be 255 characters or fewer.` |
+| `completed` is not a boolean | `400` | `Completed must be true or false.` |
+| Non-numeric list id | `400` | `List id must be a number.` |
+| Non-numeric todo id | `400` | `Todo id must be a number.` |
+| Parent list missing or owned by someone else | `404` | `List with id=<id> not found.` |
+| Todo missing or owned by someone else | `404` | `Todo with id=<id> not found.` |
+| Missing or invalid token | `401` | `Unauthorized! ...` |
+
+Deleting a list deletes its todos.
+
+## Profile
+
+`GET /todo/users/:id` and `PUT /todo/users/:id` succeed only when `:id` is the session user. `200` returns the user without a password hash:
+
+```json
+{
+  "id": 42,
+  "fName": "Jane",
+  "lName": "Doe",
+  "email": "jane@example.com",
+  "username": "jdoe",
+  "role": "worker",
+  "createdAt": "2026-07-02T12:00:00.000Z",
+  "updatedAt": "2026-07-02T12:05:00.000Z"
+}
+```
+
+`PUT` body is `fName`, `lName`, `email`, and `username`. `password` is optional. Omit it to keep the current password. `role` is ignored.
+
+| Condition | Status | Message |
+|-----------|--------|---------|
+| Blank first name | `400` | `First name is required.` |
+| Blank last name | `400` | `Last name is required.` |
+| Blank email | `400` | `Email is required.` |
+| Invalid email | `400` | `Enter a valid email address.` |
+| Blank username | `400` | `Username is required.` |
+| Password shorter than 8 characters | `400` | `Password must be at least 8 characters.` |
+| Username already used by someone else | `400` | `Username is already taken.` |
+| Email already used by someone else | `400` | `Email is already registered.` |
+| Non-numeric user id | `400` | `User id must be a number.` |
+| Missing user, or another user's id | `404` | `User with id=<id> not found.` |
+| Missing or invalid token | `401` | `Unauthorized! ...` |
+
 ## Feature provenance
 
 | Area | Introduced |
@@ -124,3 +200,5 @@ A list object:
 | Health check | Starter shell |
 | Register, login, logout | Feature 1 |
 | List CRUD | Feature 2 |
+| Todo items | Feature 3 |
+| Profile read and update | Feature 4 |

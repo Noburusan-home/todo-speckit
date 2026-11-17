@@ -45,9 +45,26 @@ export async function authenticate(req, res, next) {
   }
 }
 
+export async function getAccessibleUserOrNull(req, userId) {
+  if (Number(userId) !== Number(req.user.id)) {
+    return null;
+  }
+
+  const row = await db.user.findByPk(userId);
+  return row ?? null;
+}
+
 export async function getAccessibleListOrNull(req, listId) {
   const row = await db.list.findOne({
     where: { id: listId, userId: req.user.id },
+  });
+
+  return row ?? null;
+}
+
+export async function getAccessibleTodoOrNull(req, todoId) {
+  const row = await db.todo.findOne({
+    where: { id: todoId, userId: req.user.id },
   });
 
   return row ?? null;
